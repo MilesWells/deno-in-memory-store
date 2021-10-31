@@ -1,5 +1,6 @@
 import { Application, log } from "./deps.ts";
 import { loadDataFromFile, saveDataToFile } from "./fsUtils.ts";
+import { buildRouter } from "./router.ts";
 import { DataSchema } from "./types.ts";
 
 const PORT = 8000;
@@ -14,13 +15,7 @@ const buildExitData = (): DataSchema => ({
   lastExit: Date.now(),
 });
 
-app.addEventListener("listen", async ({ hostname, port, secure }) => {
-  const { error, result } = await loadDataFromFile<DataSchema>();
-
-  if (error) return controller.abort();
-  console.debug(result);
-  statefulData = result!;
-
+app.addEventListener("listen", ({ hostname, port, secure }) => {
   log.info(
     `Listening on: ${secure ? "https://" : "http://"}${
       hostname ??
@@ -34,9 +29,16 @@ app.addEventListener("error", async ({ message }) => {
   await saveDataToFile(buildExitData());
 });
 
-app.use((ctx) => {
-  ctx.response.body = "Hello World!";
-});
+const { error, result } = await loadDataFromFile<DataSchema>();
+
+if (error) controller.abort();
+else statefulData = result!;
+
+const router = buildRouter(statefulData!);
+
+app
+  .use(router.routes())
+  .use(router.allowedMethods());
 
 const serverPromise = app.listen({ port: PORT, signal: controller.signal });
 
@@ -44,10 +46,14 @@ await Promise.any([
   Deno.signal("SIGTERM"),
   Deno.signal("SIGINT"),
   Deno.signal("SIGABRT"),
+  serverPromise,
 ]);
 
 log.info("Process terminated. Closing Oak server...");
-controller.abort();
-await serverPromise;
+
+if (!controller.signal.aborted) {
+  controller.abort();
+  await serverPromise;
+}
 
 saveDataToFile(buildExitData());

@@ -34,7 +34,7 @@ export function upsertDocument(
   collectionName: string,
   document: Document,
   documentId?: string,
-): { error: boolean; documentId?: string } {
+): { error: boolean; documentId?: string; document?: Record<string, unknown> } {
   try {
     if (!collectionExists(schema, collectionName)) {
       createCollectionIfNotExists(schema, collectionName);
@@ -43,15 +43,19 @@ export function upsertDocument(
     const docExists = documentExists(schema, collectionName, documentId);
     const indexableId = docExists ? documentId! : crypto.randomUUID();
 
-    schema.data[collectionName][indexableId] = docExists
+    const mergedDocument = docExists
       ? {
         ...schema.data[collectionName][indexableId],
         ...document,
       }
       : document;
+
+    schema.data[collectionName][indexableId] = mergedDocument;
+
     return {
       error: false,
-      documentId,
+      documentId: indexableId,
+      document: mergedDocument,
     };
   } catch (err) {
     log.error(err);
@@ -68,6 +72,13 @@ export function getDocument<T>(
     if (!collectionExists(schema, collectionName)) {
       log.error(
         `Cannot retrieve document ${documentId} from non-existent collection ${collectionName}`,
+      );
+      return { error: true };
+    }
+
+    if (!documentExists(schema, collectionName, documentId)) {
+      log.error(
+        `Document ${documentId} does not exist in collection ${collectionName}`,
       );
       return { error: true };
     }
