@@ -107,3 +107,25 @@ export function listDocuments<T>(schema: DataSchema, collectionName: string): {
     return { error: true };
   }
 }
+
+export function deleteDocument(
+  schema: DataSchema,
+  collectionName: string,
+  documentId: string,
+) {
+  try {
+    if (!collectionExists(schema, collectionName)) {
+      log.error(
+        `Cannot delete document ${documentId} from non-existent collection ${collectionName}`,
+      );
+      return false;
+    }
+
+    delete schema.data[collectionName][documentId];
+
+    return true;
+  } catch (err) {
+    log.error(err);
+    return false;
+  }
+}
